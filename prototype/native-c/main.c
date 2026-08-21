@@ -315,8 +315,10 @@ static bool start_graphics(Wegert *wegert)
     if (wegert->display == EGL_NO_DISPLAY)
         return false;
 
-    if (!eglInitialize(wegert->display, NULL, NULL))
+    if (!eglInitialize(wegert->display, NULL, NULL)) {
+        wegert->display = EGL_NO_DISPLAY;
         return false;
+    }
 
     EGLConfig config;
     EGLint config_count = 0;
@@ -527,6 +529,25 @@ static int32_t handle_input(
         return 1;
     }
 
+    if (action == AMOTION_EVENT_ACTION_POINTER_UP) {
+        size_t lifted = (size_t) (
+            (AMotionEvent_getAction(event) & AMOTION_EVENT_ACTION_POINTER_INDEX_MASK)
+            >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT
+        );
+
+        /* Seed the next one-finger drag from a pointer that remains down. */
+        for (size_t index = 0; index < pointers; index++) {
+            if (index == lifted)
+                continue;
+            wegert->last_x = AMotionEvent_getX(event, index);
+            wegert->last_y = AMotionEvent_getY(event, index);
+            break;
+        }
+
+        wegert->last_pinch_distance = 0.0f;
+        return 1;
+    }
+
     if (action == AMOTION_EVENT_ACTION_MOVE) {
         if (pointers >= 2) {
             float distance = pointer_distance(event);
@@ -550,6 +571,9 @@ static int32_t handle_input(
         float y = AMotionEvent_getY(event, 0);
         float dx = x - wegert->last_x;
         float dy = y - wegert->last_y;
+
+        if (wegert->height <= 0)
+            return 1;
 
         /* Android touch y grows downward; the complex imaginary axis grows up. */
         float units_per_pixel =
