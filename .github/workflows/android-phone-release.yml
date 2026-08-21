@@ -6,6 +6,8 @@ on:
       - initial-phone-build
     paths-ignore:
       - RELEASE_STATUS.md
+      - .github/workflows/android-phone-release.yml
+      - .github/workflows/cleanup-useless-releases.yml
   workflow_dispatch:
 
 permissions:
