@@ -20,23 +20,19 @@ jobs:
         with:
           ref: initial-phone-build
 
-      - name: Delete phone-test releases without APK assets
+      - name: Delete obsolete phone-test releases 1 and 3
         shell: bash
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > releases.json
-          deleted=()
-          jq -c '.[] | select(.tag_name | startswith("phone-test-"))' releases.json | while read -r release; do
-            tag=$(jq -r '.tag_name' <<<"$release")
-            id=$(jq -r '.id' <<<"$release")
-            apk_count=$(jq '[.assets[]? | select(.name | endswith(".apk"))] | length' <<<"$release")
-            if [ "$apk_count" -eq 0 ]; then
-              echo "Deleting useless release $tag"
-              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${id}" || true
-              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" || true
+          for tag in phone-test-1 phone-test-3; do
+            if release=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" 2>/dev/null); then
+              id=$(jq -r '.id' <<<"$release")
+              echo "Deleting release $tag"
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/${id}"
             else
-              echo "Keeping $tag ($apk_count APK asset(s))"
+              echo "Release $tag already absent"
             fi
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/tags/${tag}" 2>/dev/null || true
           done
 
       - name: Record final release state
@@ -47,10 +43,15 @@ jobs:
           {
             echo '# Phone release cleanup'
             echo
-            echo 'Removed every `phone-test-*` release that had no `.apk` asset.'
+            echo 'Deleted obsolete releases `phone-test-1` and `phone-test-3` and their tags.'
             echo
             echo 'Remaining phone-test releases:'
-            jq -r '.[] | select(.tag_name | startswith("phone-test-")) | "- \(.tag_name): " + (([.assets[]?.name] | if length == 0 then ["no assets"] else . end) | join(", "))' final-releases.json
+            remaining=$(jq -r '.[] | select(.tag_name | startswith("phone-test-")) | "- \(.tag_name): " + (([.assets[]?.name] | if length == 0 then ["no assets"] else . end) | join(", "))' final-releases.json)
+            if [ -n "$remaining" ]; then
+              printf '%s\n' "$remaining"
+            else
+              echo '- none'
+            fi
           } > CLEANUP_STATUS.md
           git fetch origin initial-phone-build
           git checkout -B initial-phone-build origin/initial-phone-build
@@ -58,6 +59,6 @@ jobs:
           git config user.email github-actions@github.com
           git add CLEANUP_STATUS.md
           if ! git diff --cached --quiet; then
-            git commit -m 'Record phone release cleanup'
+            git commit -m 'Record obsolete release deletion'
             git push origin HEAD:initial-phone-build
           fi
