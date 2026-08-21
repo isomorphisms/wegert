@@ -1,7 +1,6 @@
 # Phone release cleanup
 
-Removed every `phone-test-*` release that had no `.apk` asset.
+Deleted obsolete releases `phone-test-1` and `phone-test-3` and their tags.
 
 Remaining phone-test releases:
-- phone-test-3: wegert-phone-test.apk
-- phone-test-1: wegert-phone-test.apk
+- none
