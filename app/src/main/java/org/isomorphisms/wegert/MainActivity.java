@@ -218,6 +218,18 @@ public final class MainActivity extends Activity {
             setPreserveEGLContextOnPause(true);
             setBackgroundColor(Color.BLACK);
 
+            scaleDetector = new ScaleGestureDetector(MainActivity.this,
+                    new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                        @Override
+                        public boolean onScale(ScaleGestureDetector detector) {
+                            double newHalfHeight = halfHeight / detector.getScaleFactor();
+                            halfHeight = Math.max(0.03, Math.min(1000.0, newHalfHeight));
+                            requestRender();
+                            announceDomain();
+                            return true;
+                        }
+                    });
+
             dragDetector = new GestureDetector(MainActivity.this,
                     new GestureDetector.SimpleOnGestureListener() {
                         @Override
@@ -230,18 +242,6 @@ public final class MainActivity extends Activity {
                             double unitsPerPixel = (2.0 * halfHeight) / Math.max(1, viewHeight);
                             centerX += distanceX * unitsPerPixel;
                             centerY -= distanceY * unitsPerPixel;
-                            requestRender();
-                            announceDomain();
-                            return true;
-                        }
-                    });
-
-            scaleDetector = new ScaleGestureDetector(MainActivity.this,
-                    new ScaleGestureDetector.SimpleOnScaleGestureListener() {
-                        @Override
-                        public boolean onScale(ScaleGestureDetector detector) {
-                            double newHalfHeight = halfHeight / detector.getScaleFactor();
-                            halfHeight = Math.max(0.03, Math.min(1000.0, newHalfHeight));
                             requestRender();
                             announceDomain();
                             return true;
