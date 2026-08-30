@@ -1,0 +1,122 @@
+name: Edric GLSL host mock
+
+on:
+  push:
+    branches:
+      - experiment/edric-glsles-host-mock
+    paths:
+      - 'experiments/edric-glsles-host/**'
+      - 'scripts/mock-edric-glsles-host.sh'
+      - '.github/workflows/edric-glsles-host-mock.yml'
+      - 'wegert.frag.in'
+      - 'wegert_color.glsl'
+      - 'complex_math_fallback.c'
+      - 'complex_math.h'
+      - 'tests/complex_math_test.c'
+  pull_request:
+    paths:
+      - 'experiments/edric-glsles-host/**'
+      - 'scripts/mock-edric-glsles-host.sh'
+      - '.github/workflows/edric-glsles-host-mock.yml'
+      - 'wegert.frag.in'
+      - 'wegert_color.glsl'
+      - 'complex_math_fallback.c'
+      - 'complex_math.h'
+      - 'tests/complex_math_test.c'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: edric-glsles-host-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  host-probe:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - lane: edric-current_glsl-main
+            idric_ref: Idriç
+            backend_ref: main
+            float_precision: ''
+          - lane: edric-current_mali-mediump
+            idric_ref: Idriç
+            backend_ref: opt/mali-g57-fp16-precision
+            float_precision: mediump
+          - lane: edric-float16-current_mali-mediump
+            idric_ref: float32-primitive
+            backend_ref: opt/mali-g57-fp16-precision
+            float_precision: mediump
+          - lane: edric-float16-totality-fix_mali-mediump
+            idric_ref: fix/float16-bootstrap-totality
+            backend_ref: opt/mali-g57-fp16-precision
+            float_precision: mediump
+          - lane: edric-float16-primitive-carrier_mali-mediump
+            idric_ref: feature/float16-core-primitive
+            backend_ref: opt/mali-g57-fp16-precision
+            float_precision: mediump
+
+    name: ${{ matrix.lane }}
+
+    steps:
+      - name: Check out Wegert experiment
+        uses: actions/checkout@v4
+
+      - name: Check out Idric
+        uses: actions/checkout@v4
+        with:
+          repository: isomorphisms/Idric
+          ref: ${{ matrix.idric_ref }}
+          path: deps/Idric
+
+      - name: Check out GLSL backend
+        uses: actions/checkout@v4
+        with:
+          repository: isomorphisms/idris-shader-backend
+          ref: ${{ matrix.backend_ref }}
+          path: deps/idris-shader-backend
+
+      - name: Install hosted x86_64 dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libgmp-dev libffi-dev \
+            glslang-tools curl ca-certificates xz-utils
+
+      - name: Run non-fatal staged diagnostic
+        env:
+          SHADER_FLOAT_PRECISION: ${{ matrix.float_precision }}
+          WEGERT_MOCK_STRICT: '0'
+        run: bash scripts/mock-edric-glsles-host.sh
+
+      - name: Publish diagnostic summary
+        if: always()
+        shell: bash
+        run: |
+          out=build/edric-glsles-host-mock
+          echo '### ${{ matrix.lane }}' >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$out/diagnosis.txt" ]; then
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat "$out/diagnosis.txt" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Probe did not reach its diagnostic writer.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f "$out/receipt.tsv" ]; then
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            cat "$out/receipt.tsv" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload AICI-ready host evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: edric-glsles-host-${{ matrix.lane }}
+          path: build/edric-glsles-host-mock
+          if-no-files-found: warn
